@@ -1,5 +1,5 @@
-using System;
-using System.IO;
+using Sente;
+
 
 namespace DbMetaTool
 {
@@ -43,6 +43,7 @@ namespace DbMetaTool
 
                             ExportScripts(connStr, outputDir);
                             Console.WriteLine("Skrypty zostały wyeksportowane pomyślnie.");
+                            Console.ReadKey();
                             return 0;
                         }
 
@@ -93,12 +94,9 @@ namespace DbMetaTool
         /// Generuje skrypty metadanych z istniejącej bazy danych Firebird 5.0.
         /// </summary>
         public static void ExportScripts(string connectionString, string outputDirectory)
-        {
-            // TODO:
-            // 1) Połącz się z bazą danych przy użyciu connectionString.
-            // 2) Pobierz metadane domen, tabel (z kolumnami) i procedur.
-            // 3) Wygeneruj pliki .sql / .json / .txt w outputDirectory.
-            throw new NotImplementedException();
+        {            
+            var exporter = new MetadataExporter(connectionString);
+            exporter.ExportTo(outputDirectory);
         }
 
         /// <summary>

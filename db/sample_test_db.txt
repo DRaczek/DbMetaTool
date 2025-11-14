@@ -1,0 +1,130 @@
+-- ===========================================================================
+--                                   DOMENY
+-- ===========================================================================
+CREATE DOMAIN D_ID AS INTEGER NOT NULL;
+CREATE DOMAIN D_NAME AS VARCHAR(100);
+CREATE DOMAIN D_DESCRIPTION AS BLOB SUB_TYPE TEXT CHARACTER SET UTF8;
+CREATE DOMAIN D_PRICE AS NUMERIC(10, 2) DEFAULT 0;
+CREATE DOMAIN D_HIRE_DATE AS DATE;
+
+-- ===========================================================================
+--                                   TABELE
+-- ===========================================================================
+
+-- Tabela 1: Prosta tabela z kluczem, używająca domen
+CREATE TABLE CATEGORIES (
+    CategoryID   D_ID,
+    CategoryName D_NAME
+);
+
+-- Tabela 2: Tabela z różnymi typami danych, bez użycia domen
+CREATE TABLE PRODUCTS (
+    ProductID    INTEGER NOT NULL,
+    ProductName  VARCHAR(200),
+    CategoryID   INTEGER,
+    UnitPrice    DECIMAL(12, 4),
+    IsActive     BOOLEAN DEFAULT TRUE,
+    ReleaseDate  TIMESTAMP
+);
+
+-- Tabela 3: Tabela z bardziej złożonymi typami i wartościami NULL
+CREATE TABLE EMPLOYEES (
+    EmployeeID    D_ID,
+    FirstName     VARCHAR(50) NOT NULL,
+    LastName      VARCHAR(50) NOT NULL,
+    HireDate      D_HIRE_DATE,
+    Notes         D_DESCRIPTION,
+    Salary        D_PRICE,
+    Photo         BLOB SUB_TYPE BINARY
+);
+
+-- Tabela 4: Tabela z kluczem obcym
+CREATE TABLE ORDERS (
+    OrderID    D_ID,
+    CustomerID CHAR(5),
+    OrderDate  DATE
+);
+
+-- Tabela 5: Tabela z kluczem złożonym
+CREATE TABLE ORDER_ITEMS (
+    OrderID   D_ID,
+    ProductID D_ID,
+    Quantity  SMALLINT,
+    Discount  FLOAT
+);
+
+
+-- ===========================================================================
+--                                    DANE
+-- ===========================================================================
+
+-- Wypełnianie tabel danymi
+INSERT INTO CATEGORIES (CategoryID, CategoryName) VALUES (1, 'Elektronika');
+INSERT INTO CATEGORIES (CategoryID, CategoryName) VALUES (2, 'Książki');
+INSERT INTO CATEGORIES (CategoryID, CategoryName) VALUES (3, 'Ogród');
+
+INSERT INTO PRODUCTS (ProductID, ProductName, CategoryID, UnitPrice, IsActive, ReleaseDate) VALUES (101, 'Laptop SuperBook Pro', 1, 4999.99, TRUE, '2023-01-15 10:00:00');
+INSERT INTO PRODUCTS (ProductID, ProductName, CategoryID, UnitPrice, IsActive, ReleaseDate) VALUES (102, 'Smartfon GigaPhone 15', 1, 3200.50, TRUE, '2023-09-20 14:30:00');
+INSERT INTO PRODUCTS (ProductID, ProductName, CategoryID, UnitPrice, IsActive, ReleaseDate) VALUES (201, 'Firebird. Bazy danych dla bystrzaków', 2, 89.90, TRUE, '2022-05-10 00:00:00');
+INSERT INTO PRODUCTS (ProductID, ProductName, CategoryID, UnitPrice, IsActive, ReleaseDate) VALUES (301, 'Automatyczny zraszacz "Oaza"', 3, 250.00, FALSE, NULL);
+INSERT INTO PRODUCTS (ProductID, ProductName, CategoryID, UnitPrice, IsActive, ReleaseDate) VALUES (999, 'Produkt z apostrofem O''Malley', 2, 19.99, TRUE, NULL);
+
+INSERT INTO EMPLOYEES (EmployeeID, FirstName, LastName, HireDate, Notes, Salary) VALUES (1, 'Jan', 'Kowalski', '2020-03-01', 'Doświadczony programista. Specjalista od Firebird.', 15000.00);
+INSERT INTO EMPLOYEES (EmployeeID, FirstName, LastName, HireDate, Notes, Salary) VALUES (2, 'Anna', 'Nowak', '2022-08-15', NULL, 9500.50);
+
+INSERT INTO ORDERS (OrderID, CustomerID, OrderDate) VALUES (1001, 'ALFKI', '2023-10-01');
+INSERT INTO ORDERS (OrderID, CustomerID, OrderDate) VALUES (1002, 'ANATR', '2023-10-05');
+
+INSERT INTO ORDER_ITEMS (OrderID, ProductID, Quantity, Discount) VALUES (1001, 101, 1, 0);
+INSERT INTO ORDER_ITEMS (OrderID, ProductID, Quantity, Discount) VALUES (1001, 201, 2, 0.1);
+INSERT INTO ORDER_ITEMS (OrderID, ProductID, Quantity, Discount) VALUES (1002, 102, 1, 0.05);
+
+-- ===========================================================================
+--                                  PROCEDURY
+-- ===========================================================================
+
+SET TERM ^ ;
+
+-- Procedura 1: Prosta, bez parametrów
+CREATE PROCEDURE GET_TOTAL_REVENUE
+RETURNS (
+    TOTAL_REVENUE D_PRICE
+)
+AS
+BEGIN
+    SELECT SUM(oi.Quantity * p.UnitPrice * (1 - oi.Discount))
+    FROM ORDER_ITEMS oi
+    JOIN PRODUCTS p ON oi.ProductID = p.ProductID
+    INTO :TOTAL_REVENUE;
+    SUSPEND;
+END^
+
+-- Procedura 2: Z parametrem wejściowym i wieloma wyjściowymi
+CREATE PROCEDURE GET_EMPLOYEE_DETAILS (
+    EMP_ID INTEGER
+)
+RETURNS (
+    FULL_NAME VARCHAR(102),
+    HIRE_DATE_INFO VARCHAR(50),
+    SALARY_INFO VARCHAR(50)
+)
+AS
+    DECLARE VARIABLE FN VARCHAR(50);
+    DECLARE VARIABLE LN VARCHAR(50);
+    DECLARE VARIABLE HD D_HIRE_DATE;
+    DECLARE VARIABLE SAL D_PRICE;
+BEGIN
+   FOR SELECT FirstName, LastName, HireDate, Salary
+        FROM EMPLOYEES
+        WHERE EmployeeID = :EMP_ID
+        INTO :FN, :LN, :HD, :SAL
+    DO
+    BEGIN
+        FULL_NAME = LN || ', ' || FN;
+        HIRE_DATE_INFO = 'Zatrudniony od: ' || HD;
+        SALARY_INFO = 'Pensja: ' || SAL || ' PLN';
+        SUSPEND;
+    END
+END^
+
+SET TERM ; ^
