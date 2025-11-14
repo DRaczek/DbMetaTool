@@ -113,22 +113,102 @@ namespace Sente
 
         private void ExportProcedures(string outputDir)
         {
-            string query = @"
-                SELECT RDB$PROCEDURE_NAME, RDB$PROCEDURE_SOURCE
+            // pobieranie procedury
+            var procedures = new List<(string Name, string Source)>();
+            string queryProcs = @"
+                SELECT RDB$PROCEDURE_NAME,
+                RDB$PROCEDURE_SOURCE
                 FROM RDB$PROCEDURES
                 WHERE RDB$SYSTEM_FLAG = 0 AND RDB$PROCEDURE_SOURCE IS NOT NULL";
 
-            using var command = new FbCommand(query, _connection);
-            using var reader = command.ExecuteReader();
-            int count = 0;
-            while (reader.Read())
+            using (var cmdProcs = new FbCommand(queryProcs, _connection))
+            using (var readerProcs = cmdProcs.ExecuteReader())
             {
-                string procName = reader.GetString(0).Trim();
-                string procSource = reader.GetString(1);
-                string script = $"SET TERM ^ ;\n{procSource}\nSET TERM ; ^";
-                File.WriteAllText(Path.Combine(outputDir, $"{procName}.sql"), script);
+                while (readerProcs.Read())
+                {
+                    procedures.Add((readerProcs.GetString(0).Trim(), readerProcs.GetString(1)));
+                }
+            }
+
+            // pobieranie danych i/o parametrów
+            string queryParams = @"
+                SELECT
+                    p.RDB$PARAMETER_NAME,                                   -- (0)
+                    p.RDB$PARAMETER_TYPE, -- 0 = input, 1 = output          -- (1)
+                    f.RDB$FIELD_TYPE,                                       -- (2)
+                    f.RDB$FIELD_SUB_TYPE,                                   -- (3)
+                    f.RDB$FIELD_LENGTH,                                     -- (4)
+                    f.RDB$FIELD_SCALE,                                      -- (5)
+                    f.RDB$FIELD_PRECISION,                                  -- (6)
+                    f.RDB$CHARACTER_LENGTH,                                 -- (7)
+                    p.RDB$FIELD_SOURCE                                      -- (8)
+                FROM RDB$PROCEDURE_PARAMETERS p
+                JOIN RDB$FIELDS f ON p.RDB$FIELD_SOURCE = f.RDB$FIELD_NAME
+                WHERE p.RDB$PROCEDURE_NAME = @ProcName AND p.RDB$SYSTEM_FLAG = 0
+                ORDER BY p.RDB$PARAMETER_TYPE, p.RDB$PARAMETER_NUMBER";
+
+            int count = 0;
+            foreach (var (procName, procSource) in procedures)
+            {
+                var inputParams = new List<string>();
+                var outputParams = new List<string>();
+
+                using (var cmdParams = new FbCommand(queryParams, _connection))
+                {
+                    cmdParams.Parameters.AddWithValue("@ProcName", procName);
+                    using (var readerParams = cmdParams.ExecuteReader())
+                    {
+                        while (readerParams.Read())
+                        {
+                            string paramName = readerParams.GetString(0).Trim();
+                            int paramType = readerParams.GetInt16(1);
+                            string domainName = readerParams.GetString(8).Trim();
+                            string dataType;
+
+                            if (domainName.StartsWith("RDB$"))
+                            {
+                                short fieldType = readerParams.GetInt16(2);
+                                short subType = readerParams.IsDBNull(3) ? (short)0 : readerParams.GetInt16(3);
+                                short precision = readerParams.IsDBNull(6) ? (short)0 : readerParams.GetInt16(6);
+                                short scale = readerParams.IsDBNull(5) ? (short)0 : readerParams.GetInt16(5);
+                                short charLength = readerParams.IsDBNull(7) ? (short)0 : readerParams.GetInt16(7);
+                                dataType = Utils.GetSqlType(fieldType, subType, precision, scale, charLength);
+                            }
+                            else
+                            {
+                                dataType = domainName;
+                            }
+
+                            string paramDefinition = $"{paramName} {dataType}";
+
+                            if (paramType == 0)
+                                inputParams.Add(paramDefinition);
+                            else
+                                outputParams.Add(paramDefinition);
+                        }
+                    }
+                }
+
+                // Generowanie skryptu procedury
+                var sb = new StringBuilder();
+                sb.AppendLine("SET TERM ^ ;");
+                sb.Append($"CREATE PROCEDURE {procName}");
+
+                if (inputParams.Any())
+                    sb.Append($" ({string.Join(", ", inputParams)})");
+
+                if (outputParams.Any())
+                    sb.Append($" RETURNS ({string.Join(", ", outputParams)})");
+
+                sb.AppendLine(" AS");
+                sb.AppendLine(procSource);
+                sb.AppendLine("^");
+                sb.AppendLine("SET TERM ; ^");
+
+                File.WriteAllText(Path.Combine(outputDir, $"{procName}.sql"), sb.ToString());
                 count++;
             }
+
             Console.WriteLine($"Wyeksportowano {count} procedur.");
         }
 
