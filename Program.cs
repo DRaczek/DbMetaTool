@@ -43,7 +43,6 @@ namespace DbMetaTool
 
                             ExportScripts(connStr, outputDir);
                             Console.WriteLine("Skrypty zostały wyeksportowane pomyślnie.");
-                            Console.ReadKey();
                             return 0;
                         }
 
