@@ -39,8 +39,16 @@
             }
             if (value is DateTime dtValue)
             {
-                // Standardowy format daty i czasu dla Firebird
-                return $"'{dtValue:yyyy-MM-dd HH:mm:ss.fff}'";
+                if (dtValue.TimeOfDay == TimeSpan.Zero)
+                {
+                    //DATE
+                    return $"'{dtValue:yyyy-MM-dd}'";
+                }
+                else
+                {
+                    //TIMESTAMP
+                    return $"'{dtValue:yyyy-MM-dd HH:mm:ss.fff}'";
+                }
             }
             if (value is bool boolValue)
             {
