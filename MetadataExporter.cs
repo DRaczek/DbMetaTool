@@ -21,9 +21,9 @@ namespace Sente
                 // 1) Połącz się z bazą danych przy użyciu connectionString.
                 _connection.Open();
 
-                string domainsDir = Path.Combine(outputDirectory, "domains");
-                string tablesDir = Path.Combine(outputDirectory, "tables");
-                string proceduresDir = Path.Combine(outputDirectory, "procedures");
+                string domainsDir = Path.Combine(outputDirectory, "1_domains");
+                string tablesDir = Path.Combine(outputDirectory, "2_tables");
+                string proceduresDir = Path.Combine(outputDirectory, "3_procedures");
                 Directory.CreateDirectory(domainsDir);
                 Directory.CreateDirectory(tablesDir);
                 Directory.CreateDirectory(proceduresDir);
