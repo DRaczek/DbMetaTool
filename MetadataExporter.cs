@@ -48,16 +48,19 @@ namespace Sente
         {
             string query = @"
                 SELECT 
-                    RDB$FIELD_NAME,                 -- (0)
-                    RDB$FIELD_LENGTH,               -- (1)
-                    RDB$FIELD_TYPE,                 -- (2)
-                    RDB$FIELD_SUB_TYPE,             -- (3)
-                    RDB$FIELD_SCALE,                -- (4)
-                    RDB$FIELD_PRECISION,            -- (5)
-                    RDB$CHARACTER_LENGTH,           -- (6)
-                    RDB$NULL_FLAG                   -- (7)
-                FROM RDB$FIELDS
-                WHERE RDB$SYSTEM_FLAG = 0 AND RDB$FIELD_NAME NOT LIKE 'RDB$%'";
+                    f.RDB$FIELD_NAME,                 -- (0)
+                    f.RDB$FIELD_LENGTH,               -- (1)
+                    f.RDB$FIELD_TYPE,                 -- (2)
+                    f.RDB$FIELD_SUB_TYPE,             -- (3)
+                    f.RDB$FIELD_SCALE,                -- (4)
+                    f.RDB$FIELD_PRECISION,            -- (5)
+                    f.RDB$CHARACTER_LENGTH,           -- (6)
+                    f.RDB$NULL_FLAG,                  -- (7)
+                    f.RDB$DEFAULT_SOURCE,             -- (8)
+                    cs.RDB$CHARACTER_SET_NAME         -- (9) 
+                FROM RDB$FIELDS f
+                LEFT JOIN RDB$CHARACTER_SETS cs ON f.RDB$CHARACTER_SET_ID = cs.RDB$CHARACTER_SET_ID
+                WHERE f.RDB$SYSTEM_FLAG = 0 AND f.RDB$FIELD_NAME NOT LIKE 'RDB$%'";
 
             using var command = new FbCommand(query, _connection);
             using var reader = command.ExecuteReader();
@@ -73,15 +76,36 @@ namespace Sente
                 short precision = reader.IsDBNull(5) ? (short)0 : reader.GetInt16(5);
                 short charLength = reader.IsDBNull(6) ? (short)0 : reader.GetInt16(6);
                 bool isNullable = reader.IsDBNull(7) || reader.GetInt16(7) == 0;
+                string? defaultSource = reader.IsDBNull(8) ? null : reader.GetString(8);
+                string? charSetName = reader.IsDBNull(9) ? null : reader.GetString(9).Trim();
 
                 string dataType = Utils.GetSqlType(fieldType, subType, precision, scale, charLength);
 
-                string script = $"CREATE DOMAIN {fieldName} AS {dataType}" + (isNullable ? "" : " NOT NULL") + ";";
-                File.WriteAllText(Path.Combine(outputDir, $"{fieldName}.sql"), script);
+                var scriptBuilder = new StringBuilder();
+                scriptBuilder.Append($"CREATE DOMAIN {fieldName} AS {dataType}");
+
+                if (!string.IsNullOrEmpty(charSetName) 
+                    && (dataType.StartsWith("CHAR") 
+                    || dataType.StartsWith("VARCHAR") 
+                    || dataType.Contains("BLOB SUB_TYPE TEXT")))
+                {
+                    scriptBuilder.Append($" CHARACTER SET {charSetName}");
+                }
+                if (!string.IsNullOrEmpty(defaultSource))
+                {
+                    scriptBuilder.Append($" {defaultSource.Trim()}");
+                }
+                if (!isNullable)
+                {
+                    scriptBuilder.Append(" NOT NULL");
+                }
+                scriptBuilder.Append(";");  
+
+                File.WriteAllText(Path.Combine(outputDir, $"{fieldName}.sql"), scriptBuilder.ToString());
                 count++;
             }
             Console.WriteLine($"Wyeksportowano {count} domen.");
-        }
+        }   
 
         private void ExportTables(string outputDir)
         {
@@ -219,17 +243,20 @@ namespace Sente
 
             string queryColumnsFormat = @"
                     SELECT 
-                        rf.RDB$FIELD_NAME,                                      -- Nazwa kolumny w tabeli (0)
-                        f.RDB$FIELD_TYPE,                                       -- Typ pola (1)
-                        f.RDB$FIELD_SUB_TYPE,                                   -- Podtyp (np. dla BLOB, NUMERIC) (2)
-                        f.RDB$FIELD_LENGTH,                                     -- Długość (3)
+                        rf.RDB$FIELD_NAME,                                          -- Nazwa kolumny w tabeli (0)
+                        f.RDB$FIELD_TYPE,                                           -- Typ pola (1)
+                        f.RDB$FIELD_SUB_TYPE,                                       -- Podtyp (np. dla BLOB, NUMERIC) (2)
+                        f.RDB$FIELD_LENGTH,                                         -- Długość (3)
                         f.RDB$FIELD_SCALE,                                      
-                        rf.RDB$NULL_FLAG,                                       -- Czy może być NULL (5)
-                        rf.RDB$FIELD_SOURCE,                                    -- Nazwa domeny lub pola globalnego (6)
-                        f.RDB$FIELD_PRECISION,                                  -- Precyzja (dla NUMERIC) (7)
-                        f.RDB$CHARACTER_LENGTH                                  -- Długość znakowa (dla CHAR, VARCHAR) (8)
-                    FROM RDB$RELATION_FIELDS rf                                 -- FROM Kolumny tabeli
-                    JOIN RDB$FIELDS f ON rf.RDB$FIELD_SOURCE = f.RDB$FIELD_NAME -- JOIN Typy pól i ich właściwości
+                        rf.RDB$NULL_FLAG,                                           -- Czy może być NULL (5)
+                        rf.RDB$FIELD_SOURCE,                                        -- Nazwa domeny lub pola globalnego (6)
+                        f.RDB$FIELD_PRECISION,                                      -- Precyzja (dla NUMERIC) (7)
+                        f.RDB$CHARACTER_LENGTH,                                     -- Długość znakowa (dla CHAR, VARCHAR) (8)
+                        rf.RDB$DEFAULT_SOURCE,                                      -- Wartość domyślna kolumny (9)
+                        cs.RDB$CHARACTER_SET_NAME                                   -- Zestaw znaków (10)
+                    FROM RDB$RELATION_FIELDS rf                                     -- FROM Kolumny tabeli
+                    JOIN RDB$FIELDS f ON rf.RDB$FIELD_SOURCE = f.RDB$FIELD_NAME     -- JOIN Typy pól i ich właściwości
+                    LEFT JOIN RDB$CHARACTER_SETS cs ON f.RDB$CHARACTER_SET_ID = cs.RDB$CHARACTER_SET_ID
                     WHERE rf.RDB$RELATION_NAME = @TableName
                     ORDER BY rf.RDB$FIELD_POSITION";
 
@@ -243,6 +270,8 @@ namespace Sente
                 string colName = readerCols.GetString(0).Trim();
                 string fieldSource = readerCols.GetString(6).Trim();
                 string colType;
+                string? columnDefaultSource = readerCols.IsDBNull(9) ? null : readerCols.GetString(9).Trim();
+                string? charSetName = readerCols.IsDBNull(10) ? null : readerCols.GetString(10).Trim();
 
                 if (fieldSource.StartsWith("RDB$"))
                 {
@@ -253,6 +282,14 @@ namespace Sente
                     short precision = readerCols.IsDBNull(7) ? (short)0 : readerCols.GetInt16(7);
                     short charLength = readerCols.IsDBNull(8) ? (short)0 : readerCols.GetInt16(8);
                     colType = Utils.GetSqlType(fieldType, subType, precision, scale, charLength);
+
+                    if (!string.IsNullOrEmpty(charSetName) 
+                        && (colType.StartsWith("CHAR") 
+                        || colType.StartsWith("VARCHAR") 
+                        || colType.Contains("BLOB SUB_TYPE TEXT")))
+                    {
+                        colType += $" CHARACTER SET {charSetName}";
+                    }
                 }
                 else
                 {
@@ -260,7 +297,18 @@ namespace Sente
                 }
 
                 bool isNullable = readerCols.IsDBNull(5) || readerCols.GetInt16(5) == 0;
-                columnDefinitions.Add($"  {colName} {colType}" + (isNullable ? "" : " NOT NULL"));
+                var colDefBuilder = new StringBuilder($"  {colName} {colType}");
+                if (!string.IsNullOrEmpty(columnDefaultSource))
+                {
+                    colDefBuilder.Append($" {columnDefaultSource}");
+                }
+
+                if (!isNullable)
+                {
+                    colDefBuilder.Append(" NOT NULL");
+                }
+
+                columnDefinitions.Add(colDefBuilder.ToString());
             }
 
             sb.AppendLine(string.Join(",\n", columnDefinitions));
