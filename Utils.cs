@@ -37,6 +37,10 @@
                 // Ucieczka apostrofów i opakowanie w apostrofy
                 return $"'{strValue.Replace("'", "''")}'";
             }
+            if (value is TimeSpan tsValue)
+            {
+                return $"'{tsValue:c}'";
+            }
             if (value is DateTime dtValue)
             {
                 if (dtValue.TimeOfDay == TimeSpan.Zero)
