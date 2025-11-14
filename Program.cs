@@ -82,12 +82,8 @@ namespace DbMetaTool
         /// </summary>
         public static void BuildDatabase(string databaseDirectory, string scriptsDirectory)
         {
-            // TODO:
-            // 1) Utwórz pustą bazę danych FB 5.0 w katalogu databaseDirectory.
-            // 2) Wczytaj i wykonaj kolejno skrypty z katalogu scriptsDirectory
-            //    (tylko domeny, tabele, procedury).
-            // 3) Obsłuż błędy i wyświetl raport.
-            throw new NotImplementedException();
+            var builder = new DatabaseBuilder();
+            builder.Build(databaseDirectory, scriptsDirectory);
         }
 
         /// <summary>
@@ -104,11 +100,8 @@ namespace DbMetaTool
         /// </summary>
         public static void UpdateDatabase(string connectionString, string scriptsDirectory)
         {
-            // TODO:
-            // 1) Połącz się z bazą danych przy użyciu connectionString.
-            // 2) Wykonaj skrypty z katalogu scriptsDirectory (tylko obsługiwane elementy).
-            // 3) Zadbaj o poprawną kolejność i bezpieczeństwo zmian.
-            throw new NotImplementedException();
+            var builder = new DatabaseBuilder();
+            builder.Update(connectionString, scriptsDirectory);
         }
     }
 }
