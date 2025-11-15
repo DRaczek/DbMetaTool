@@ -49,5 +49,5 @@ dotnet run -- update-db --connection-string "User=SYSDBA;Password=ppp123;Databas
 Aplikacja została przeze mnie pomyślnie przetestowana na 2 różnych przykładowych bazach danych które zostały wygenerowane w tym celu.
 
 > 💡 **Ważna uwaga dotycząca dostępu do bazy danych**
->  W pliku DatabaseBuilder.cs aby utworzyć bazę musiałem zdefiniować connection string który zawiera sztywno wpisane hasło i użytkownika. Aby aplikacja działała poprawnie zaleca się wpisać w tamtym fragmencie własne dane dostępu do bazy danych.
-> ```bash string connectionString = @$"User=SYSDBA;Password=ppp123;Database={dbPath};DataSource=localhost;Port=3050;Dialect=3;Charset=UTF8"; ```
+>  W pliku DatabaseBuilder.cs aby utworzyć bazę musiałem zdefiniować connection string który zawiera sztywno wpisane hasło i użytkownika. Aby aplikacja działała poprawnie zaleca się wpisać w Properties/launchSettings.json własne dane dostępowe do bazy danych
+> ```bash string connectionString = @$"User={Environment.GetEnvironmentVariable("Username") ?? "SYSDBA"};Password={Environment.GetEnvironmentVariable("Password") ?? "ppp123"};Database={dbPath};DataSource=localhost;Port=3050;Dialect=3;Charset=UTF8";```
