@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Sente": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "Username": "SYSDBA",
+        "Password": "ppp123"
+      }
+    }
+  }
+}

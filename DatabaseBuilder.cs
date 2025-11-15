@@ -36,7 +36,7 @@ namespace Sente
 
             Console.WriteLine($"Tworzenie nowej bazy danych w: {dbPath}");
 
-            string connectionString = @$"User=SYSDBA;Password=ppp123;Database={dbPath};DataSource=localhost;Port=3050;Dialect=3;Charset=UTF8";
+            string connectionString = @$"User={Environment.GetEnvironmentVariable("Username") ?? "SYSDBA"};Password={Environment.GetEnvironmentVariable("Password") ?? "ppp123"};Database={dbPath};DataSource=localhost;Port=3050;Dialect=3;Charset=UTF8";
 
             try
             {
