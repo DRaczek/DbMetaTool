@@ -1,0 +1,108 @@
+
+                                
+                          
+
+/******************************************************************************/
+/*                                   DOMENY                                   */
+/******************************************************************************/
+
+CREATE DOMAIN D_ID AS BIGINT;
+
+CREATE DOMAIN D_NAME AS VARCHAR(200) CHARACTER SET UTF8;
+
+CREATE DOMAIN D_DESCRIPTION AS BLOB SUB_TYPE TEXT;
+
+CREATE DOMAIN D_PRICE AS NUMERIC(12, 2) DEFAULT 0;
+
+CREATE DOMAIN D_TIMESTAMP AS TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+CREATE DOMAIN D_IS_ACTIVE AS BOOLEAN DEFAULT TRUE;
+
+CREATE DOMAIN D_STATUS_CODE AS SMALLINT;
+
+COMMIT;
+
+/******************************************************************************/
+/*                                    TABELE                                  */
+/******************************************************************************/
+
+CREATE TABLE PRODUCTS (
+    ProductID   D_ID,
+    ProductName D_NAME,
+    UnitPrice   D_PRICE,
+    IsAvailable D_IS_ACTIVE
+);
+
+CREATE TABLE SYSTEM_LOGS (
+    LogID       BIGINT, -- Celowo bez domeny, aby przetestować typ 'ad-hoc'
+    LogMessage  D_DESCRIPTION,
+    LogTime     D_TIMESTAMP,
+    StatusCode  D_STATUS_CODE
+);
+
+COMMIT;
+
+/******************************************************************************/
+/*                                  PROCEDURY                                 */
+/******************************************************************************/
+
+SET TERM ^ ;
+
+/*
+  Procedura pomocnicza (niskopoziomowa) do zapisu logu.
+  Zostanie wywołana przez inną procedurę.
+*/
+CREATE PROCEDURE LOG_INTERNAL (
+    P_MESSAGE D_DESCRIPTION,
+    P_STATUS_CODE D_STATUS_CODE)
+AS
+BEGIN
+    /*
+      W prawdziwej aplikacji tutaj użylibyśmy generatora (sekwencji)
+      do wstawienia unikalnego ID. Dla uproszczenia wstawiamy NULL.
+    */
+    INSERT INTO SYSTEM_LOGS (LogID, LogMessage, StatusCode) 
+    VALUES (NULL, :P_MESSAGE, :P_STATUS_CODE);
+END^
+
+/* 
+  Procedura biznesowa (wysokopoziomowa), która WYWOŁUJE inną procedurę.
+*/
+CREATE PROCEDURE A_REGISTER_PRODUCT_ACTION (
+    P_PRODUCT_ID D_ID,
+    P_ACTION_DESCRIPTION VARCHAR(100))
+AS
+DECLARE VARIABLE V_LOG_MESSAGE D_DESCRIPTION;
+BEGIN
+    /* Przygotowujemy wiadomość do zapisu w logu */
+    V_LOG_MESSAGE = 'Wykonano akcję "' || :P_ACTION_DESCRIPTION || '" dla produktu o ID: ' || :P_PRODUCT_ID;
+
+    /* Wywołujemy procedurę LOG_INTERNAL, aby zapisała nasz log */
+    EXECUTE PROCEDURE LOG_INTERNAL(:V_LOG_MESSAGE, 200); -- Kod 200 oznacza 'Informacja'
+END^
+
+/*
+  Prosta procedura selectująca do testów.
+*/
+CREATE PROCEDURE GET_LOG_COUNT
+RETURNS (
+    LOG_COUNT BIGINT)
+AS
+BEGIN
+    SELECT COUNT(*) FROM SYSTEM_LOGS INTO :LOG_COUNT;
+    SUSPEND;
+END^
+
+SET TERM ; ^
+COMMIT;
+
+/******************************************************************************/
+/*                             DANE DEMONSTRACYJNE                            */
+/******************************************************************************/
+
+/* Dodajemy produkty */
+INSERT INTO PRODUCTS (ProductID, ProductName, UnitPrice, IsAvailable) VALUES (101, 'Krzesło dębowe "Tron"', 499.99, TRUE);
+INSERT INTO PRODUCTS (ProductID, ProductName, UnitPrice, IsAvailable) VALUES (102, 'Stół żeliwny "Goliath"', 1250.00, TRUE);
+INSERT INTO PRODUCTS (ProductID, ProductName, UnitPrice, IsAvailable) VALUES (103, 'Lampa naftowa "Świetlik"', 89.50, FALSE);
+
+COMMIT;

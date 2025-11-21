@@ -216,7 +216,7 @@ namespace Sente
                 // Generowanie skryptu procedury
                 var sb = new StringBuilder();
                 sb.AppendLine("SET TERM ^ ;");
-                sb.Append($"CREATE PROCEDURE {procName}");
+                sb.Append($"CREATE OR ALTER PROCEDURE {procName}");
 
                 if (inputParams.Any())
                     sb.Append($" ({string.Join(", ", inputParams)})");

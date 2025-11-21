@@ -1,5 +1,7 @@
 ﻿using FirebirdSql.Data.FirebirdClient;
 using FirebirdSql.Data.Isql;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Sente
 {
@@ -36,7 +38,7 @@ namespace Sente
 
             Console.WriteLine($"Tworzenie nowej bazy danych w: {dbPath}");
 
-            string connectionString = @$"User={Environment.GetEnvironmentVariable("Username") ?? "SYSDBA"};Password={Environment.GetEnvironmentVariable("Password") ?? "ppp123"};Database={dbPath};DataSource=localhost;Port=3050;Dialect=3;Charset=UTF8";
+            string connectionString = @$"User={Environment.GetEnvironmentVariable("Username") ?? "SYSDBA"};Password={Environment.GetEnvironmentVariable("Password") ?? "masterkey"};Database={dbPath};DataSource=localhost;Port=3050;Dialect=3;Charset=UTF8";
 
             try
             {
@@ -68,35 +70,102 @@ namespace Sente
 
             Console.WriteLine($"Znaleziono {sqlFiles.Count} plików .sql do wykonania.");
 
+            var procedureFiles = sqlFiles.Where(s => s.Contains(Path.Combine(scriptsDirectory, "3_procedures"))).ToList();
+            var otherFiles = sqlFiles.Except(procedureFiles).ToList();
+
+            Console.WriteLine("\n--- Faza 1: Wykonywanie skryptów podstawowych (domeny, tabele, dane) ---");
             int executedCount = 0;
-            foreach (var file in sqlFiles)
+            foreach (var file in otherFiles)
             {
-                try
-                {
-                    Console.WriteLine($"-- Wykonywanie skryptu: {Path.GetFileName(file)}");
-                    string scriptContent = File.ReadAllText(file);
+                 ExecuteSingleScriptFromFile(file, connection);
+            }
+            Console.WriteLine($"Pomyślnie wykonano {executedCount} skryptów.");
 
-                    if (string.IsNullOrWhiteSpace(scriptContent))
+            if (procedureFiles.Any())
+            {
+                Console.WriteLine("\n--- Faza 2a: Tworzenie 'zaślepek' procedur (Stubbing) ---");
+                foreach (var file in procedureFiles)
+                {
+                    try
                     {
-                        Console.WriteLine("   -> Pominięto pusty plik.");
-                        continue;
-                    }
+                        Console.WriteLine($"-- Tworzenie zaślepki dla: {Path.GetFileName(file)}");
+                        string originalContent = File.ReadAllText(file, System.Text.Encoding.UTF8);
+                        string stubScript = GenerateProcedureStub(originalContent);
 
-                    var script = new FbScript(scriptContent);
-                    script.Parse();
-                    var batch = new FbBatchExecution(connection);
-                    batch.AppendSqlStatements(script);
-                    batch.Execute();
-                    executedCount++;
+                        if (string.IsNullOrEmpty(stubScript))
+                        {
+                            Console.WriteLine("   -> Nie udało się wygenerować zaślepki, pominięto.");
+                            continue;
+                        }
+
+                        ExecuteSingleScript(stubScript, connection);
+                    }
+                    catch (Exception ex)
+                    {
+                        string errorMessage = $"Krytyczny błąd podczas tworzenia zaślepki dla '{Path.GetFileName(file)}'.\nSzczegóły: {ex.Message}";
+                        throw new Exception(errorMessage, ex);
+                    }
                 }
-                catch (Exception ex)
+                Console.WriteLine("Faza 2a zakończona pomyślnie.");
+
+                Console.WriteLine("\n--- Faza 2b: Wypełnianie procedur właściwą logiką ---");
+                foreach (var file in procedureFiles)
                 {
-                    string errorMessage = $"Krytyczny błąd podczas wykonywania skryptu '{Path.GetFileName(file)}'. Proces budowania przerwany.\nSzczegóły: {ex.Message}";
-                    throw new Exception(errorMessage, ex);
+                    ExecuteSingleScriptFromFile(file, connection);
                 }
+                Console.WriteLine("Faza 2b zakończona pomyślnie. Wszystkie procedury zostały zaktualizowane.");
+            }
+        }
+
+        private string GenerateProcedureStub(string fullScript)
+        {
+            var match = Regex.Match(fullScript, @"\s+AS\s+", RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+            {
+                return string.Empty;
             }
 
-            Console.WriteLine($"Pomyślnie wykonano {executedCount} skryptów.");
+            string header = fullScript.Substring(0, match.Index + match.Length);
+            
+            var stubBuilder = new StringBuilder();
+            stubBuilder.AppendLine(header);
+            stubBuilder.AppendLine("BEGIN");
+            stubBuilder.AppendLine("  -- Stub");
+            stubBuilder.AppendLine("END;");
+
+            return stubBuilder.ToString();
+        }
+
+        private void ExecuteSingleScriptFromFile(string file, FbConnection connection)
+        {
+            try
+            {
+                Console.WriteLine($"-- Wykonywanie skryptu: {Path.GetFileName(file)}");
+                string scriptContent = File.ReadAllText(file, System.Text.Encoding.UTF8);
+
+                if (string.IsNullOrWhiteSpace(scriptContent))
+                {
+                    Console.WriteLine("   -> Pominięto pusty plik.");
+                    return;
+                }
+
+                ExecuteSingleScript(scriptContent, connection);
+            }
+            catch (Exception ex)
+            {
+                string errorMessage = $"Krytyczny błąd podczas wykonywania skryptu '{Path.GetFileName(file)}'.\nSzczegóły: {ex.Message}";
+                throw new Exception(errorMessage, ex);
+            }
+        }
+
+        private void ExecuteSingleScript(string scriptContent, FbConnection connection)
+        {
+            var script = new FbScript(scriptContent);
+            script.Parse();
+            var batch = new FbBatchExecution(connection);
+            batch.AppendSqlStatements(script);
+            batch.Execute();
         }
     }
 }
