@@ -127,7 +127,7 @@ namespace Sente
                 var sb = new StringBuilder();
 
                 AppendCreateTableScript(tableName, sb);
-                AppendInsertScripts(tableName, sb);
+                //AppendInsertScripts(tableName, sb);
 
                 File.WriteAllText(Path.Combine(outputDir, $"{tableName}.sql"), sb.ToString());
                 count++;
