@@ -247,10 +247,6 @@ namespace Sente
             batch.Execute();
         }
 
-        /// <summary>
-        /// Odczytuje aktualny schemat z podłączonej bazy danych.
-        /// Używa zapytań do tabel systemowych RDB$*, podobnie jak MetadataExporter.
-        /// </summary>
         private SchemaModel GetCurrentSchema(FbConnection connection)
         {
             var schema = new SchemaModel();
@@ -313,10 +309,6 @@ namespace Sente
             return schema;
         }
 
-        /// <summary>
-        /// Parsuje pliki .sql z definicjami tabel i buduje model schematu docelowego.
-        /// Używa prostych wyrażeń regularnych - to uproszczenie na potrzeby zadania.
-        /// </summary>
         private SchemaModel GetTargetSchema(string scriptsDirectory)
         {
             var schema = new SchemaModel();
@@ -413,7 +405,7 @@ namespace Sente
                     schema.Procedures.Add(name, new ProcedureModel
                     {
                         Name = name,
-                        FullScript = cleanFullScript,
+                        FullScript = fullScript,
                         Body = body
                     });
                 }
@@ -422,9 +414,6 @@ namespace Sente
                 return schema;
         }
 
-        /// <summary>
-        /// Porównuje dwa modele schematów i generuje listę poleceń ALTER/CREATE.
-        /// </summary>
         private List<string> CompareSchemas(SchemaModel targetSchema, SchemaModel currentSchema)
         {
             var scripts = new List<string>();
